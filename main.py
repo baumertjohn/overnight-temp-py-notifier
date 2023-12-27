@@ -30,27 +30,34 @@ def find_lat_lon():
     return lat_lon_data["lat"], lat_lon_data["lon"]
 
 
-def get_weather_data(lat, lon):
+def get_weather_data(zip_code, country_code):
     """
     TODO: create doc string for this function
     """
+    # Example
+    # api.openweathermap.org/data/2.5/forecast?zip={zip code},{country code}&appid={API key}
     params = {
-        "lat": lat,
-        "lon": lon,
+        "zip": f"{zip_code},{country_code}",
         "appid": openweather_api_key,
+        "units": "imperial",
     }
     response = requests.get(
         "https://api.openweathermap.org/data/2.5/forecast", params=params
     )
     weather_data = response.json()
-    print(weather_data)
+    for i in range(40):
+        time = weather_data['list'][i]["dt_txt"]
+        if time[-8:] == "06:00:00":
+            low_temp = int(weather_data['list'][i]['main']["temp_min"])
+            print(i, low_temp, time)
+    
 
 
 def main():
-    lat, lon = find_lat_lon()
-    print(f"Requested latitude and longitude is: {lat}, {lon}")
+    # lat, lon = find_lat_lon()
+    # print(f"Requested latitude and longitude is: {lat}, {lon}")
 
-    get_weather_data(lat, lon)
+    get_weather_data(ZIP_CODE, COUNTRY_CODE)
 
 
 if __name__ == "__main__":
