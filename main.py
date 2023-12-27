@@ -3,6 +3,7 @@
 
 import os
 import requests
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,19 +46,37 @@ def get_weather_data(zip_code, country_code):
         "https://api.openweathermap.org/data/2.5/forecast", params=params
     )
     weather_data = response.json()
+    city_name = weather_data["city"]["name"]
+    low_temps = []
     for i in range(40):
-        time = weather_data['list'][i]["dt_txt"]
+        time = weather_data["list"][i]["dt_txt"]
         if time[-8:] == "06:00:00":
-            low_temp = int(weather_data['list'][i]['main']["temp_min"])
-            print(i, low_temp, time)
-    
+            dt_object = datetime.utcfromtimestamp(weather_data["list"][i]["dt"])
+            prev_day = (dt_object - timedelta(days=1)).strftime("%A")
+            low_temp = int(weather_data["list"][i]["main"]["temp_min"])
+            # day = dt_object.strftime("%A")
+            # print(i, low_temp, time, day)
+            low_temps.append({prev_day: low_temp})
+    return city_name, low_temps
+
+
+def create_message(city_name, low_temps):
+    weather_message = f"{city_name} Overnight Forecast\n"
+    for temp in low_temps:
+        for key, value in temp.items():
+            if value <= 39:
+                warning = " ❄❄❄"
+            else:
+                warning = ""
+            weather_message += f"{key} Night: {value}{warning}\n"
+    return weather_message
 
 
 def main():
     # lat, lon = find_lat_lon()
-    # print(f"Requested latitude and longitude is: {lat}, {lon}")
-
-    get_weather_data(ZIP_CODE, COUNTRY_CODE)
+    city_name, low_temps = get_weather_data(ZIP_CODE, COUNTRY_CODE)
+    weather_message = create_message(city_name, low_temps)
+    print(weather_message)
 
 
 if __name__ == "__main__":
