@@ -20,40 +20,63 @@ ZIP_CODE = "80615"
 COUNTRY_CODE = "us"
 
 
-def get_weather_data(zip_code, country_code):
+def find_lat_lon(zip_code, country_code):
     """
-    Retrieves weather forecast data for a given ZIP code and country code from the OpenWeatherMap API.
+    Fetches city name, latitude, and longitude data for a given ZIP code and country code using the OpenWeatherMap API.
 
     Args:
         zip_code (str): The ZIP code of the location.
         country_code (str): The country code of the location.
 
     Returns:
-        Tuple[str, List[Dict[str, Union[str, int]]]]: A tuple containing the city name and a list of dictionaries,
-        each representing the lowest temperatures for the corresponding day and night.
+        Tuple[str, float, float]: A tuple containing the city name, latitude, and longitude information.
 
     Example:
-        >>> city, low_temps = get_weather_data("12345", "US")
+        >>> city, latitude, longitude = find_lat_lon("12345", "US")
     """
     params = {
         "zip": f"{zip_code},{country_code}",
         "appid": OPENWEATHER_API_KEY,
+    }
+    response = requests.get("http://api.openweathermap.org/geo/1.0/zip", params=params)
+    lat_lon_data = response.json()
+    return lat_lon_data["name"], lat_lon_data["lat"], lat_lon_data["lon"]
+
+
+def get_weather_data(lat, lon):
+    """
+    Retrieves 8-day weather forecast data for a given latitude and longitude from the OpenWeatherMap API.
+
+    Args:
+        lat (float): The latitude of the location.
+        lon (float): The longitude of the location.
+
+    Returns:
+        List[Dict[str, Union[str, int]]]: A list of dictionaries, each representing the lowest temperatures
+        for the corresponding day and night over the next 8 days.
+
+    Example:
+        >>> low_temps = get_weather_data(40.7128, -74.0060)
+    """
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "appid": OPENWEATHER_API_KEY,
+        "exclude": "current,minutely,hourly",
         "units": "imperial",
     }
     response = requests.get(
-        "https://api.openweathermap.org/data/2.5/forecast", params=params
+        "https://api.openweathermap.org/data/3.0/onecall", params=params
     )
     weather_data = response.json()
-    city_name = weather_data["city"]["name"]
+    num_of_days = len(weather_data["daily"])
     low_temps = []
-    for i in range(40):
-        time = weather_data["list"][i]["dt_txt"]
-        if time[-8:] == "06:00:00":
-            dt_object = datetime.utcfromtimestamp(weather_data["list"][i]["dt"])
-            prev_day = (dt_object - timedelta(days=1)).strftime("%A")
-            low_temp = int(weather_data["list"][i]["main"]["temp_min"])
-            low_temps.append({prev_day: low_temp})
-    return city_name, low_temps
+    for i in range(num_of_days):
+        dt_object = datetime.utcfromtimestamp(weather_data["daily"][i]["dt"])
+        day = dt_object.strftime("%A")
+        low_temp = int(weather_data["daily"][i]["temp"]["min"])
+        low_temps.append({day: low_temp})
+    return low_temps
 
 
 def create_message(low_temps):
@@ -72,13 +95,20 @@ def create_message(low_temps):
         >>> message = create_message(low_temps)
     """
     weather_message = ""
+    overnight = True
     for temp in low_temps:
         for key, value in temp.items():
             if value <= 39:
                 warning = " ❄❄❄"
             else:
                 warning = ""
-            weather_message += f"{key} night: {value}{warning}\n"
+            # Set "Overnight" for first day of list
+            if not overnight:
+                day = f"{key} night"
+            else:
+                day = "Overnight"
+                overnight = False
+            weather_message += f"{day}: {value}{warning}\n"
     return weather_message
 
 
@@ -125,16 +155,16 @@ def main():
     Example:
         >>> main()
     """
-    # Get city name and 5 day low temps from openweathermap
-    print("Getting weather data")
-    city_name, low_temps = get_weather_data(ZIP_CODE, COUNTRY_CODE)
+    # Get city name and latitude and longitude based on ZIP from Openweathermap Geocoding API
+    city_name, lat, lon = find_lat_lon(ZIP_CODE, COUNTRY_CODE)
+
+    # Get 8 day low temps from Openweathermap One Call API 3.0
+    low_temps = get_weather_data(lat, lon)
 
     # Create weather message from day / temp dict
-    print("Creating message")
     weather_message = create_message(low_temps)
 
     # Send formatted message to user
-    print("Sending weather email")
     send_email_message(city_name, weather_message)
 
 
